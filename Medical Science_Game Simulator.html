@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical/Science Game Spacebridge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: #0a0a1a;
+            color: #00ffcc;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .terminal-glow {
+            text-shadow: 0 0 5px #00ffcc, 0 0 10px #00ffcc, 0 0 15px #00ffcc;
+        }
+        .viewscreen-border {
+            border: 2px solid #00ffcc;
+            box-shadow: 0 0 15px #00ffcc inset, 0 0 10px #00ffcc;
+            background: rgba(0, 20, 15, 0.8);
+            backdrop-filter: blur(5px);
+        }
+        .station-btn {
+            border: 1px solid #007a63;
+            background-color: rgba(0, 50, 40, 0.6);
+            transition: all 0.3s ease;
+        }
+        .station-btn.active, .station-btn:hover {
+            background-color: rgba(0, 255, 204, 0.3);
+            color: #ffffff;
+            text-shadow: 0 0 5px #ffffff;
+            border-color: #00ffcc;
+        }
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .modal-content {
+            background-color: #0a0a1a;
+        }
+        #main-output, .station-content {
+            scrollbar-width: thin;
+            scrollbar-color: #00ffcc #0a0a1a;
+        }
+        #main-output::-webkit-scrollbar, .station-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        #main-output::-webkit-scrollbar-track, .station-content::-webkit-scrollbar-track {
+            background: #0a0a1a;
+        }
+        #main-output::-webkit-scrollbar-thumb, .station-content::-webkit-scrollbar-thumb {
+            background-color: #00ffcc;
+            border-radius: 4px;
+            border: 2px solid #0a0a1a;
+        }
+        .star-field {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: #000;
+            overflow: hidden;
+        }
+        .star {
+            position: absolute;
+            background: #fff;
+            border-radius: 50%;
+            animation: twinkle linear infinite;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-6 lg:p-8">
+    <div id="star-field" class="star-field"></div>
+
+    <div id="game-container" class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left Column: Viewscreen and Output -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+            <header class="text-center">
+                <h1 class="text-3xl md:text-4xl font-orbitron terminal-glow">Medical/Science Game Spacebridge</h1>
+                <p class="text-sm text-cyan-300">U.S.S. Asclepius</p>
+            </header>
+            <div id="viewscreen" class="viewscreen-border rounded-lg p-4 flex-grow min-h-[300px] lg:min-h-[400px]">
+                <div id="main-output" class="h-full overflow-y-auto pr-2">
+                    <!-- Game text will appear here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Stations -->
+        <div class="flex flex-col gap-4">
+            <h2 class="text-2xl font-orbitron terminal-glow text-center lg:text-left">Stations</h2>
+            <div id="station-selector" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-2 gap-2">
+                <button class="station-btn p-3 rounded-md active" onclick="switchStation('medical')" data-station="medical">Medical</button>
+                <button class="station-btn p-3 rounded-md" onclick="switchStation('science')" data-station="science">Science</button>
+                <button class="station-btn p-3 rounded-md" onclick="switchStation('comms')" data-station="comms">Comms</button>
+                <button class="station-btn p-3 rounded-md" onclick="switchStation('helm')" data-station="helm">Helm</button>
+                <button class="station-btn p-3 rounded-md" onclick="switchStation('saved')" data-station="saved">Saved Cases</button>
+                <button class="station-btn p-3 rounded-md" onclick="switchStation('mission')" data-station="mission">Mission</button>
+            </div>
+            <div id="station-display" class="viewscreen-border rounded-lg p-4 flex-grow min-h-[300px]">
+                <!-- Station content will appear here -->
+                <div id="station-medical" class="station-content h-full overflow-y-auto"></div>
+                <div id="station-science" class="station-content hidden h-full overflow-y-auto"></div>
+                <div id="station-comms" class="station-content hidden h-full overflow-y-auto"></div>
+                <div id="station-helm" class="station-content hidden h-full overflow-y-auto"></div>
+                <div id="station-saved" class="station-content hidden h-full overflow-y-auto"></div>
+                <div id="station-mission" class="station-content hidden h-full overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Modal -->
+    <div id="loading-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center">
+        <div class="modal-content viewscreen-border rounded-lg p-8 text-center">
+            <h3 class="text-2xl font-orbitron terminal-glow mb-4">Processing...</h3>
+            <div class="animate-pulse text-cyan-300">Awaiting Subspace Transmission</div>
+        </div>
+    </div>
+    
+    <!-- Medical Case Input Modal -->
+    <div id="medical-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+        <div class="modal-content viewscreen-border rounded-lg p-6 max-w-lg w-full">
+            <h3 class="text-2xl font-orbitron terminal-glow mb-4">Manually Admit Patient</h3>
+            <p class="text-cyan-300 mb-4">Enter patient's presenting symptoms. The medical AI will generate a full case file.</p>
+            <textarea id="symptoms-input" class="w-full h-32 bg-black text-cyan-200 border border-cyan-700 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-cyan-400" placeholder="e.g., 'High fever, photosensitivity, purple rash on torso'"></textarea>
+            <div class="flex justify-end gap-4 mt-4">
+                <button class="station-btn p-2 rounded-md" onclick="closeMedicalModal()">Cancel</button>
+                <button class="station-btn active p-2 rounded-md" onclick="submitManualCase()">Submit Case</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- DOM Elements ---
+        const mainOutput = document.getElementById('main-output');
+        const stationButtons = document.querySelectorAll('#station-selector .station-btn');
+        const stationContents = document.querySelectorAll('.station-content');
+        const loadingModal = document.getElementById('loading-modal');
+        const medicalModal = document.getElementById('medical-modal');
+        const symptomsInput = document.getElementById('symptoms-input');
+
+        // --- Game State ---
+        let gameState = {
+            currentStation: 'medical',
+            missionStage: 'initial_briefing',
+            shipStatus: {
+                hull: 100,
+                power: 100,
+                lifeSupport: 'nominal'
+            },
+            location: 'Orbiting Earth',
+            patients: [], // Active patient cases
+            savedCases: [], // Archived patient cases for review
+            clues: []
+        };
+        
+        // --- Game State Persistence ---
+        function saveGameState() {
+            localStorage.setItem('starshipBridgeSimState', JSON.stringify(gameState));
+        }
+
+        function loadGameState() {
+            const savedState = localStorage.getItem('starshipBridgeSimState');
+            if (savedState) {
+                gameState = JSON.parse(savedState);
+                // Backwards compatibility for users who played before this feature
+                if (!gameState.savedCases) gameState.savedCases = [];
+                if (!gameState.clues) gameState.clues = [];
+            }
+        }
+
+        // --- Typewriter Effect ---
+        function typeWriter(element, text, speed = 20, callback = () => {}) {
+            let i = 0;
+            element.innerHTML = '';
+            const container = document.createElement('div');
+            element.appendChild(container);
+
+            function type() {
+                if (i < text.length) {
+                    container.innerHTML += text.charAt(i);
+                    i++;
+                    mainOutput.scrollTop = mainOutput.scrollHeight;
+                    setTimeout(type, speed);
+                } else {
+                    callback();
+                }
+            }
+            type();
+        }
+
+        function appendToOutput(htmlContent, isCommand = false) {
+            const entry = document.createElement('div');
+            if(isCommand) {
+                entry.className = 'mt-4 text-yellow-300';
+                entry.innerHTML = `> ${htmlContent}`;
+            } else {
+                entry.className = 'mt-2 text-cyan-200';
+                entry.innerHTML = htmlContent;
+            }
+            mainOutput.appendChild(entry);
+            mainOutput.scrollTop = mainOutput.scrollHeight;
+        }
+        
+        // --- AI Integration ---
+        async function callGemini(prompt, isJson = false) {
+            showLoading(true);
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+             if(isJson){
+                payload.generationConfig = {
+                    responseMimeType: "application/json",
+                };
+            }
+            
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API call failed with status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                     if(isJson) return JSON.parse(text);
+                    return text;
+                } else {
+                   return "Error: Received an unexpected response from the AI. There may be a solar flare interfering with communications.";
+                }
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                return `Error: Critical communication failure. Cannot contact AI core. ${error.message}`;
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // --- Station Logic ---
+        function switchStation(stationId) {
+            gameState.currentStation = stationId;
+            
+            stationButtons.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.station === stationId);
+            });
+
+            stationContents.forEach(content => {
+                content.classList.toggle('hidden', content.id !== `station-${stationId}`);
+            });
+            updateStationDisplay();
+            saveGameState();
+        }
+
+        function updateStationDisplay() {
+            const stationId = gameState.currentStation;
+            const container = document.getElementById(`station-${stationId}`);
+            if (!container) return;
+            container.innerHTML = ''; 
+            
+            let content = ``;
+            switch(stationId) {
+                case 'medical':
+                    content = `
+                        <h3 class="font-orbitron text-lg terminal-glow">Medical Bay</h3>
+                        <p class="text-sm mb-4">Monitor patient vitals and manage cases.</p>
+                        <button class="station-btn p-2 rounded-md w-full mb-4" onclick="handleMedicalAction('manual_admit')">Manually Admit Patient</button>
+                        <div id="patient-list" class="space-y-4">
+                           ${gameState.patients.length === 0 ? '<p>No active cases.</p>' : ''}
+                        </div>
+                    `;
+                    container.innerHTML = content;
+                    const patientList = container.querySelector('#patient-list');
+                    gameState.patients.forEach((patient, index) => {
+                        const patientDiv = document.createElement('div');
+                        patientDiv.className = 'p-3 rounded-md bg-cyan-900/50 border border-cyan-700';
+                        
+                        let patientHTML = `
+                            <p class="font-bold">${patient.name} (${patient.species})</p>
+                            <p class="text-sm">Vitals: ${patient.vitals}</p>
+                            <p class="text-sm">Symptoms: ${patient.symptoms}</p>
+                        `;
+
+                        if (patient.treatment) {
+                             patientHTML += `
+                                <div class="mt-2 pt-2 border-t border-cyan-800">
+                                    <p class="text-sm mt-2 text-green-400"><strong>Status:</strong> Undergoing treatment.</p>
+                                    <button class="station-btn p-1 mt-2 text-sm rounded-md w-full" onclick="saveCase(${index})">Save & Discharge Patient</button>
+                                </div>
+                            `;
+                        } else if (patient.diagnosis) {
+                            patientHTML += `
+                                <div class="mt-2 pt-2 border-t border-cyan-800">
+                                    <p class="text-sm font-bold">Diagnosis:</p>
+                                    <p class="text-xs italic">${patient.diagnosis.substring(0, 100)}...</p>
+                                    <button class="station-btn p-1 mt-2 text-sm rounded-md w-full" onclick="proposeTreatment(${index})">Propose Treatment Plan</button>
+                                </div>
+                            `;
+                        } else {
+                            patientHTML += `<button class="station-btn p-1 mt-2 text-sm rounded-md w-full" onclick="diagnosePatient(${index})">Run Diagnosis</button>`;
+                        }
+
+                        patientDiv.innerHTML = patientHTML;
+                        patientList.appendChild(patientDiv);
+                    });
+                    break;
+                case 'science':
+                    content = `<h3 class="font-orbitron text-lg terminal-glow">Science Console</h3><p class="text-sm mb-4">Analyze celestial bodies and anomalies.</p><button class="station-btn p-2 rounded-md w-full" onclick="handleScienceAction('scan_location')">Scan Current Location</button>`;
+                    container.innerHTML = content;
+                    break;
+                case 'comms':
+                    content = `<h3 class="font-orbitron text-lg terminal-glow">Communications</h3><p class="text-sm mb-4">Open and manage communication channels.</p><button class="station-btn p-2 rounded-md w-full" onclick="handleCommsAction('hail_starfleet')">Hail Starfleet Command</button>`;
+                    if(gameState.missionStage === 'investigate_outpost'){
+                        content += `<button class="station-btn p-2 mt-2 rounded-md w-full" onclick="handleCommsAction('hail_outpost')">Hail Research Outpost Epsilon</button>`;
+                    }
+                    container.innerHTML = content;
+                    break;
+                case 'helm':
+                    content = `<h3 class="font-orbitron text-lg terminal-glow">Helm Control</h3><p class="text-sm mb-2">Current Location: ${gameState.location}</p><p class="text-sm mb-4">Set course and engage warp drive.</p>`;
+                    if(gameState.missionStage === 'go_to_outpost'){
+                        content += `<button class="station-btn p-2 rounded-md w-full" onclick="handleHelmAction('warp_to_epsilon')">Set course for Epsilon Indi system</button>`;
+                    }
+                    container.innerHTML = content;
+                    break;
+                case 'saved':
+                    content = `
+                        <h3 class="font-orbitron text-lg terminal-glow">Archived Cases</h3>
+                        <p class="text-sm mb-4">Review completed cases for training.</p>
+                        <div id="saved-case-list" class="space-y-2">
+                            ${gameState.savedCases.length === 0 ? '<p>No cases archived.</p>' : ''}
+                        </div>
+                    `;
+                    container.innerHTML = content;
+                    const savedCaseList = container.querySelector('#saved-case-list');
+                    gameState.savedCases.forEach((p, index) => {
+                        const caseDiv = document.createElement('div');
+                        caseDiv.className = 'p-2 rounded-md bg-cyan-900/50 border border-cyan-800 hover:border-cyan-400 cursor-pointer transition-colors';
+                        caseDiv.innerHTML = `<p>${p.name} (${p.species})</p>`;
+                        caseDiv.onclick = () => viewSavedCase(index);
+                        savedCaseList.appendChild(caseDiv);
+                    });
+                    break;
+                case 'mission':
+                     content = `<h3 class="font-orbitron text-lg terminal-glow">Mission Log</h3><p class="text-sm mb-4">Current objectives and collected clues.</p><div id="mission-objectives"></div><h4 class="font-orbitron text-md terminal-glow mt-4">Clues:</h4><ul id="mission-clues" class="list-disc list-inside">${gameState.clues.length > 0 ? gameState.clues.map(c => `<li>${c}</li>`).join('') : '<li>No clues collected.</li>'}</ul>`;
+                     container.innerHTML = content;
+                     updateMissionObjectives();
+                    break;
+            }
+        }
+        
+        function updateMissionObjectives() {
+            const objectivesContainer = document.getElementById('mission-objectives');
+            if(!objectivesContainer) return;
+            let objectiveText = '';
+            switch(gameState.missionStage) {
+                case 'initial_briefing': objectiveText = 'Awaiting mission briefing. Check communications.'; break;
+                case 'go_to_outpost': objectiveText = 'Use the Helm to travel to the Epsilon Indi system.'; break;
+                case 'investigate_outpost': objectiveText = 'Investigate the research outpost. Use Science and Comms stations.'; break;
+            }
+            objectivesContainer.innerHTML = `<p><strong>Objective:</strong> ${objectiveText}</p>`;
+        }
+
+        // --- Action Handlers ---
+        function handleMedicalAction(action) {
+            if (action === 'manual_admit') {
+                medicalModal.classList.remove('hidden');
+                symptomsInput.focus();
+            }
+        }
+
+        async function submitManualCase() {
+            const symptoms = symptomsInput.value.trim();
+            if (!symptoms) return;
+            closeMedicalModal();
+            appendToOutput(`Medical action: Manually admitting patient with symptoms: ${symptoms}`, true);
+            const prompt = `You are a medical simulation AI for a sci-fi game. Based on the user-provided symptoms "${symptoms}", generate a patient case file. Create a plausible sci-fi alien species or use a common one. The response must be a JSON object with the following keys: "name" (a string, the patient's name), "species" (a string), "vitals" (a string describing their current vital signs, e.g., 'Heart rate elevated, temperature 39.5 C'), and "symptoms" (a string, which should be the user-provided symptoms).`;
+            const patientData = await callGemini(prompt, true);
+            if (patientData && patientData.name) {
+                const newPatient = { ...patientData, diagnosis: null, treatment: null };
+                gameState.patients.push(newPatient);
+                appendToOutput(`<strong class="font-orbitron terminal-glow">New Patient Admitted:</strong><br>A new patient, ${patientData.name}, has been admitted to the medical bay.`);
+                updateAndSave();
+            } else {
+                appendToOutput(`<strong class="text-red-500">Error:</strong><br>The medical computer failed to generate a complete case file. Please try again.`);
+            }
+        }
+        
+        async function diagnosePatient(patientIndex) {
+            const patient = gameState.patients[patientIndex];
+            if (!patient) return;
+            appendToOutput(`Medical action: Running diagnosis for ${patient.name}`, true);
+            const prompt = `You are an expert medical diagnostician AI aboard a starship, specializing in xenobiology. A patient, ${patient.name}, a ${patient.species}, presents with the following: Vitals are '${patient.vitals}' and symptoms are '${patient.symptoms}'. Provide a differential diagnosis. List at least 3 possibilities, from most likely to least likely, and briefly explain your reasoning for each. Keep the language appropriate for a medical officer. The diagnoses can be real, fictional, or a mix.`;
+            const diagnosis = await callGemini(prompt);
+            gameState.patients[patientIndex].diagnosis = diagnosis;
+            appendToOutput(`<strong class="font-orbitron terminal-glow">Diagnostic Report for ${patient.name}:</strong><br>${diagnosis.replace(/\n/g, '<br>')}`);
+            updateAndSave();
+        }
+        
+        async function proposeTreatment(patientIndex) {
+            const patient = gameState.patients[patientIndex];
+            if (!patient || !patient.diagnosis) return;
+            appendToOutput(`Medical action: Devising treatment plan for ${patient.name}`, true);
+            const prompt = `You are a starship's medical AI. A patient, ${patient.name} (${patient.species}), has been diagnosed with the following:\n--- DIAGNOSIS ---\n${patient.diagnosis}\n--- END DIAGNOSIS ---\nBased on this diagnosis and their original symptoms ('${patient.symptoms}'), devise a comprehensive treatment plan. Specify medications (with fictional sci-fi names), procedures, and the expected prognosis.`;
+            const treatmentPlan = await callGemini(prompt);
+            gameState.patients[patientIndex].treatment = treatmentPlan;
+            appendToOutput(`<strong class="font-orbitron terminal-glow">Treatment Plan for ${patient.name}:</strong><br>${treatmentPlan.replace(/\n/g, '<br>')}`);
+            updateAndSave();
+        }
+
+        function saveCase(patientIndex) {
+            const patientToSave = gameState.patients[patientIndex];
+            gameState.savedCases.push(patientToSave);
+            gameState.patients.splice(patientIndex, 1); // Remove from active patients
+            appendToOutput(`Case for ${patientToSave.name} has been archived.`, true);
+            updateAndSave();
+        }
+
+        function viewSavedCase(caseIndex) {
+            const savedCase = gameState.savedCases[caseIndex];
+            if (!savedCase) return;
+            const caseDetails = `
+                <div class="p-2 bg-black/30 rounded-lg">
+                <strong class="font-orbitron terminal-glow text-xl">Archived Case File</strong><br>
+                <strong class="text-lg">${savedCase.name} (${savedCase.species})</strong><br><br>
+                <strong>Symptoms:</strong><br><p class="pl-2">${savedCase.symptoms}</p><br>
+                <strong>Vitals:</strong><br><p class="pl-2">${savedCase.vitals}</p><br>
+                <strong>Final Diagnosis:</strong><br><div class="pl-2">${savedCase.diagnosis.replace(/\n/g, '<br>')}</div><br>
+                <strong>Treatment Administered:</strong><br><div class="pl-2">${savedCase.treatment.replace(/\n/g, '<br>')}</div>
+                </div>
+            `;
+            appendToOutput(caseDetails);
+        }
+
+        function closeMedicalModal() {
+            medicalModal.classList.add('hidden');
+            symptomsInput.value = '';
+        }
+
+        async function handleScienceAction(action) {
+            appendToOutput(`Science action: ${action.replace('_',' ')}`, true);
+            let prompt = ``;
+            if (action === 'scan_location') {
+                 if(gameState.location === 'Epsilon Indi System'){
+                     prompt = `You are the science console of the starship USS Asclepius. The medical officer has requested a scan of the Epsilon Indi system, focusing on Research Outpost Epsilon. Generate a scan report. The key information is that the outpost is running on emergency power and is not responding to hails. There are faint, unstable biological signs onboard. There are no other ships in the system. The star is a stable K-class orange dwarf.`;
+                 } else {
+                     prompt = `You are the science console of the starship USS Asclepius. The medical officer has requested a standard scan of our current location, which is Earth orbit. Generate a brief, mundane report indicating all is normal, mentioning standard orbital traffic and sensor readings are within expected parameters.`;
+                 }
+                 const response = await callGemini(prompt);
+                 appendToOutput(`<strong class="font-orbitron terminal-glow">Science Report:</strong><br>${response.replace(/\n/g, '<br>')}`);
+                 if(gameState.location === 'Epsilon Indi System'){
+                     if (!gameState.clues.includes("Outpost on emergency power.")) gameState.clues.push("Outpost on emergency power.");
+                     if (!gameState.clues.includes("Faint, unstable biological signs detected.")) gameState.clues.push("Faint, unstable biological signs detected.");
+                     updateAndSave();
+                 }
+            }
+        }
+
+        async function handleCommsAction(action) {
+             appendToOutput(`Comms action: ${action.replace('_',' ')}`, true);
+             let prompt = ``;
+             if(action === 'hail_starfleet'){
+                 if(gameState.missionStage === 'initial_briefing'){
+                    prompt = `You are the comms system of the USS Asclepius. Generate a priority message from Starfleet Command for the ship's medical officer. The message should be a mission briefing. The mission is to investigate a communications blackout at Research Outpost Epsilon in the Epsilon Indi system. The last message from them was a garbled scientific update. The mission is urgent. Sign it as Admiral Quinn.`;
+                    const response = await callGemini(prompt);
+                    appendToOutput(`<strong class="font-orbitron terminal-glow">Incoming Message - Priority 1:</strong><br>${response.replace(/\n/g, '<br>')}`);
+                    gameState.missionStage = 'go_to_outpost';
+                    updateAndSave();
+                 } else {
+                    prompt = `You are the comms system of the USS Asclepius. Generate a standard check-in response from Starfleet Command. They acknowledge our position and ask for a status update. Nothing urgent. Signed by a low-level communications officer.`;
+                    const response = await callGemini(prompt);
+                    appendToOutput(`<strong class="font-orbitron terminal-glow">Incoming Message:</strong><br>${response.replace(/\n/g, '<br>')}`);
+                 }
+             } else if (action === 'hail_outpost') {
+                 prompt = `You are the comms system of the USS Asclepius. We are hailing Research Outpost Epsilon, which is known to be in distress. Generate a response that is just static and a single, garbled word that sounds like '...fever...'. This should be unsettling.`;
+                 const response = await callGemini(prompt);
+                 appendToOutput(`<strong class="font-orbitron terminal-glow">Channel Open - Outpost Epsilon:</strong><br>${response.replace(/\n/g, '<br>')}`);
+                 if(!gameState.clues.includes("Garbled message mentioned 'fever'.")) gameState.clues.push("Garbled message mentioned 'fever'.");
+                 updateAndSave();
+             }
+        }
+        
+        async function handleHelmAction(action) {
+            appendToOutput(`Helm action: ${action.replace('_',' ')}`, true);
+             if (action === 'warp_to_epsilon') {
+                const prompt = `You are the ship's computer. Generate a dramatic, short narrative for the ship traveling at warp speed from Earth to the Epsilon Indi system. Mention the stretching of stars and the hum of the engines. Conclude by stating the ship has arrived.`;
+                const response = await callGemini(prompt);
+                appendToOutput(`<strong class="font-orbitron terminal-glow">Warp Drive Active:</strong><br>${response.replace(/\n/g, '<br>')}`);
+                gameState.location = 'Epsilon Indi System';
+                gameState.missionStage = 'investigate_outpost';
+                updateAndSave();
+            }
+        }
+
+        function updateAndSave() {
+            updateStationDisplay();
+            updateMissionObjectives();
+            saveGameState();
+        }
+
+        // --- UI Helpers ---
+        function showLoading(isLoading) {
+            if (isLoading) {
+                loadingModal.classList.remove('hidden');
+            } else {
+                loadingModal.classList.add('hidden');
+            }
+        }
+        
+        // --- Starfield Background ---
+        function createStars() {
+            const starField = document.getElementById('star-field');
+            if (!starField) return;
+            const numStars = 200;
+            for (let i = 0; i < numStars; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                const size = Math.random() * 3;
+                star.style.width = `${size}px`;
+                star.style.height = `${size}px`;
+                star.style.top = `${Math.random() * 100}%`;
+                star.style.left = `${Math.random() * 100}%`;
+                const duration = Math.random() * 2 + 1;
+                star.style.animationDuration = `${duration}s`;
+                star.style.animationDelay = `${Math.random() * duration}s`;
+                starField.appendChild(star);
+            }
+        }
+        
+        function injectKeyframes() {
+            const style = document.createElement('style');
+            style.innerHTML = `@keyframes twinkle { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }`;
+            document.head.appendChild(style);
+        }
+
+        // --- Game Initialization ---
+        function init() {
+            loadGameState();
+            injectKeyframes();
+            createStars();
+            
+            if (localStorage.getItem('starshipBridgeSimState')) {
+                // If there's saved data, just load the UI
+                updateAndSave();
+                switchStation(gameState.currentStation || 'medical');
+            } else {
+                // First time playing, show the intro
+                switchStation('mission');
+                const introText = "Welcome, Doctor. You have command of the bridge. All systems are online and awaiting your orders. Check the comms station for your first mission briefing from Starfleet Command.";
+                typeWriter(mainOutput, introText, 20, () => {
+                    updateAndSave();
+                    switchStation('medical'); 
+                });
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
